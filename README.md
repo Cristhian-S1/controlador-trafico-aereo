@@ -59,4 +59,33 @@ graph TB
 
 ---
 
+## Stack Tecnologico
 
+| Capa | Tecnologia |
+|---|---|
+| Backend | Node.js + Express |
+| Frontend | Next.js |
+| API Gateway | Nginx |
+| Message Broker | RabbitMQ |
+| Bases de Datos | PostgreSQL (1 por microservicio) |
+| Contenedores | Docker (imagenes node:18-alpine) |
+| Orquestacion | Kubernetes / K3s |
+| CI/CD | GitHub Actions (ramas develop y main) |
+
+---
+
+## Repositorio
+
+- *Rama develop*: despliegues automaticos a QA (qa.grupo1.uta.cl)
+- *Rama main*: despliegues automaticos a PROD (prod.grupo1.uta.cl)
+
+---
+
+## Integrantes — Grupo 1
+
+| Nombre | Rol |
+|---|---|
+| Katalina Ignacia Oviedo Diaz | Backend |
+| Fernanda Javiera Ventura Briceno | Frontend |
+| Sebastian Alejandro Torres Santibanez | API Gateway |
+| Cristhian Manuel Sanchez Femayor | Database |
