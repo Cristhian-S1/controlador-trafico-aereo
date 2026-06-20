@@ -182,3 +182,7 @@ Publicado por **Servicio 3**. Consumido por **Servicio 1**.
 | Fernanda Javiera Ventura Briceno | Frontend |
 | Sebastian Alejandro Torres Santibanez | API Gateway |
 | Cristhian Manuel Sanchez Femayor | Database |
+
+## Dinamica de Transferencia de Conocimiento
+
+Cada dia de clases, un integrante distinto dedica *3 minutos* a explicar al resto su area de responsabilidad. El objetivo es que al final de la semana, los 4 miembros puedan explicar el sistema completo.
