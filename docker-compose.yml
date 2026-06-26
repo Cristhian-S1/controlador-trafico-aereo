@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: atc-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [atc-net]
+
+  db-vuelos:
+    image: postgres:15-alpine
+    container_name: atc-db-vuelos
+    environment:
+      POSTGRES_DB: db_vuelos
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - vol-db-vuelos:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [atc-net]
+
+  db-pistas:
+    image: postgres:15-alpine
+    container_name: atc-db-pistas
+    environment:
+      POSTGRES_DB: db_pistas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - vol-db-pistas:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [atc-net]
+
+  db-tasas:
+    image: postgres:15-alpine
+    container_name: atc-db-tasas
+    environment:
+      POSTGRES_DB: db_tasas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - vol-db-tasas:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [atc-net]
+
+  servicio1:
+    build: ./servicio1
+    container_name: atc-servicio1
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      DB_HOST: db-vuelos
+      DB_PORT: 5432
+      DB_NAME: db_vuelos
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      RABBIT_URL: amqp://admin:admin123@rabbitmq:5672
+    depends_on:
+      rabbitmq:  { condition: service_healthy }
+      db-vuelos: { condition: service_healthy }
+    networks: [atc-net]
+    restart: on-failure
+
+  servicio2:
+    build: ./servicio2
+    container_name: atc-servicio2
+    ports:
+      - "3002:3002"
+    environment:
+      DB_HOST: db-pistas
+      DB_PORT: 5432
+      DB_NAME: db_pistas
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      RABBIT_URL: amqp://admin:admin123@rabbitmq:5672
+    depends_on:
+      rabbitmq:  { condition: service_healthy }
+      db-pistas: { condition: service_healthy }
+    networks: [atc-net]
+    restart: on-failure
+
+  servicio3:
+    build: ./servicio3
+    container_name: atc-servicio3
+    ports:
+      - "3003:3003"
+    environment:
+      DB_HOST: db-tasas
+      DB_PORT: 5432
+      DB_NAME: db_tasas
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      RABBIT_URL: amqp://admin:admin123@rabbitmq:5672
+    depends_on:
+      rabbitmq:  { condition: service_healthy }
+      db-tasas:  { condition: service_healthy }
+    networks: [atc-net]
+    restart: on-failure
+
+volumes:
+  vol-db-vuelos:
+  vol-db-pistas:
+  vol-db-tasas:
+
+networks:
+  atc-net:
+    driver: bridge
