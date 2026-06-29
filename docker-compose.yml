@@ -1,6 +1,63 @@
-version: '3.8'
-
 services:
+  postgres-vuelos:
+    image: postgres:15-alpine
+    container_name: atc-postgres-vuelos
+    environment:
+      POSTGRES_DB: vuelos
+      POSTGRES_USER: atc
+      POSTGRES_PASSWORD: atc123
+    ports:
+      - "5432:5432"
+    volumes:
+      - vuelos_data:/var/lib/postgresql/data
+      - ./db/vuelos/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - atc-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atc -d vuelos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-pistas:
+    image: postgres:15-alpine
+    container_name: atc-postgres-pistas
+    environment:
+      POSTGRES_DB: pistas
+      POSTGRES_USER: atc
+      POSTGRES_PASSWORD: atc123
+    ports:
+      - "5433:5432"
+    volumes:
+      - pistas_data:/var/lib/postgresql/data
+      - ./db/pistas/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - atc-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atc -d pistas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-tasas:
+    image: postgres:15-alpine
+    container_name: atc-postgres-tasas
+    environment:
+      POSTGRES_DB: tasas
+      POSTGRES_USER: atc
+      POSTGRES_PASSWORD: atc123
+    ports:
+      - "5434:5432"
+    volumes:
+      - tasas_data:/var/lib/postgresql/data
+      - ./db/tasas/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - atc-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atc -d tasas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -8,130 +65,67 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: admin123
+    networks:
+      - atc-network
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
-    networks: [atc-net]
 
-  db-vuelos:
-    image: postgres:15-alpine
-    container_name: atc-db-vuelos
-    environment:
-      POSTGRES_DB: db_vuelos
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - vol-db-vuelos:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks: [atc-net]
-
-  db-pistas:
-    image: postgres:15-alpine
-    container_name: atc-db-pistas
-    environment:
-      POSTGRES_DB: db_pistas
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5433:5432"
-    volumes:
-      - vol-db-pistas:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks: [atc-net]
-
-  db-tasas:
-    image: postgres:15-alpine
-    container_name: atc-db-tasas
-    environment:
-      POSTGRES_DB: db_tasas
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5434:5432"
-    volumes:
-      - vol-db-tasas:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks: [atc-net]
-
-  servicio1:
-    build: ./servicio1
-    container_name: atc-servicio1
-    ports:
-      - "3001:3001"
+  vuelos:
+    build: ./services/vuelos
+    container_name: atc-vuelos
     environment:
       PORT: 3001
-      DB_HOST: db-vuelos
-      DB_PORT: 5432
-      DB_NAME: db_vuelos
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      RABBIT_URL: amqp://admin:admin123@rabbitmq:5672
-    depends_on:
-      rabbitmq:  { condition: service_healthy }
-      db-vuelos: { condition: service_healthy }
-    networks: [atc-net]
-    restart: on-failure
-
-  servicio2:
-    build: ./servicio2
-    container_name: atc-servicio2
+      DATABASE_URL: postgres://atc:atc123@postgres-vuelos:5432/vuelos
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
     ports:
-      - "3002:3002"
-    environment:
-      DB_HOST: db-pistas
-      DB_PORT: 5432
-      DB_NAME: db_pistas
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      RABBIT_URL: amqp://admin:admin123@rabbitmq:5672
+      - "3001:3001"
+    networks:
+      - atc-network
     depends_on:
-      rabbitmq:  { condition: service_healthy }
-      db-pistas: { condition: service_healthy }
-    networks: [atc-net]
-    restart: on-failure
+      postgres-vuelos:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
 
-  servicio3:
-    build: ./servicio3
-    container_name: atc-servicio3
-    ports:
-      - "3003:3003"
+  pistas:
+    build: ./services/pistas
+    container_name: atc-pistas
     environment:
-      DB_HOST: db-tasas
-      DB_PORT: 5432
-      DB_NAME: db_tasas
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      RABBIT_URL: amqp://admin:admin123@rabbitmq:5672
+      DATABASE_URL: postgres://atc:atc123@postgres-pistas:5432/pistas
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    networks:
+      - atc-network
     depends_on:
-      rabbitmq:  { condition: service_healthy }
-      db-tasas:  { condition: service_healthy }
-    networks: [atc-net]
-    restart: on-failure
+      postgres-pistas:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  tasas:
+    build: ./services/tasas
+    container_name: atc-tasas
+    environment:
+      DATABASE_URL: postgres://atc:atc123@postgres-tasas:5432/tasas
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    networks:
+      - atc-network
+    depends_on:
+      postgres-tasas:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
-  vol-db-vuelos:
-  vol-db-pistas:
-  vol-db-tasas:
+  vuelos_data:
+  pistas_data:
+  tasas_data:
 
 networks:
-  atc-net:
+  atc-network:
     driver: bridge
