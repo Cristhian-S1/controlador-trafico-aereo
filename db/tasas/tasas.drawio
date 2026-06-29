@@ -1,0 +1,12 @@
+<mxfile host="app.diagrams.net"><diagram id="mtx5m090-objr" name="Page-1"><mxGraphModel>
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="2" value="tasas" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+      <mxGeometry x="40" y="40" width="280" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="3" value="id SERIAL PK&lt;br&gt;vuelo_id VARCHAR(32)&lt;br&gt;pista_id VARCHAR(20)&lt;br&gt;costo_aterrizaje NUMERIC(10,2)&lt;br&gt;costo_estacionamiento NUMERIC(10,2)&lt;br&gt;costo_total NUMERIC(10,2)&lt;br&gt;moneda VARCHAR(3)&lt;br&gt;timestamp TIMESTAMPTZ" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="40" y="80" width="280" height="160" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel></diagram></mxfile>

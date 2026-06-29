@@ -1,0 +1,12 @@
+<mxfile host="app.diagrams.net"><diagram id="zran0p9n-nyg3" name="Page-1"><mxGraphModel>
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="2" value="vuelos" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+      <mxGeometry x="40" y="40" width="280" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="3" value="vuelo_id VARCHAR(32) PK&lt;br&gt;aerolinea VARCHAR(50)&lt;br&gt;numero_vuelo VARCHAR(20)&lt;br&gt;origen VARCHAR(10)&lt;br&gt;destino VARCHAR(10)&lt;br&gt;aeronave VARCHAR(20)&lt;br&gt;pasajeros INTEGER&lt;br&gt;timestamp_solicitud TIMESTAMPTZ&lt;br&gt;estado VARCHAR(20)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="40" y="80" width="280" height="180" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel></diagram></mxfile>
