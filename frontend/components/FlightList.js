@@ -10,6 +10,12 @@ function statusClass(estado) {
   return 'badge badge-pendiente';
 }
 
+function rowStatusClass(estado) {
+  if (estado === 'COMPLETADO') return 'row-completado';
+  if (estado === 'ASIGNADA') return 'row-asignada';
+  return 'row-pendiente';
+}
+
 export default function FlightList({ refreshTrigger }) {
   const [flights, setFlights] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +60,7 @@ export default function FlightList({ refreshTrigger }) {
         </thead>
         <tbody>
           {flights.map((flight) => (
-            <tr key={flight.vuelo_id}>
+            <tr key={flight.vuelo_id} className={rowStatusClass(flight.estado)}>
               <td>{flight.vuelo_id}</td>
               <td>{flight.aerolinea} {flight.numero_vuelo}</td>
               <td>{flight.origen} → {flight.destino}</td>

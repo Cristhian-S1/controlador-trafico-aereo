@@ -63,7 +63,7 @@ export default function FlightForm({ onFlightCreated }) {
   };
 
   return (
-    <div className="card">
+    <div className="card sidebar-card">
       <h2>Nueva solicitud de aterrizaje</h2>
       <form onSubmit={handleSubmit}>
         <div className="form-grid">

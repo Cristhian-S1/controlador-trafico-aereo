@@ -33,8 +33,14 @@ export default function Home() {
         <SSEStatus onEvent={handleSSEEvent} />
       </header>
 
-      <FlightForm onFlightCreated={handleFlightCreated} />
-      <FlightList refreshTrigger={refreshTrigger} />
+      <div className="layout">
+        <aside className="sidebar">
+          <FlightForm onFlightCreated={handleFlightCreated} />
+        </aside>
+        <section className="main-content">
+          <FlightList refreshTrigger={refreshTrigger} />
+        </section>
+      </div>
     </main>
   );
 }
