@@ -4,6 +4,7 @@ const amqp = require('amqplib');
 const DB_URL = process.env.DATABASE_URL || 'postgres://atc:atc123@postgres-tasas:5432/tasas';
 const RABBIT_URL = process.env.RABBITMQ_URL || 'amqp://guest:guest@rabbitmq:5672';
 const EXCHANGE = 'atc.exchange';
+const PROCESO_DELAY_MS = parseInt(process.env.PROCESO_DELAY_MS || '8000', 10);
 
 const TARIFAS = {
   COMERCIAL: { aterrizaje: 250, estacionamiento: 50 },
@@ -27,7 +28,10 @@ async function start() {
     if (!msg) return;
     try {
       const data = JSON.parse(msg.content.toString());
-      console.log('[Tasas] AsignacionPista recibida:', data.vuelo_id);
+      console.log('[Tasas] AsignacionPista recibida:', data.vuelo_id, '- calculando tasas...');
+
+      // Tiempo de procesamiento simulado (hace visible el estado ASIGNADA)
+      await new Promise((r) => setTimeout(r, PROCESO_DELAY_MS));
 
       const tarifa = TARIFAS[data.tipo_pista] || TARIFAS.COMERCIAL;
       const total = tarifa.aterrizaje + tarifa.estacionamiento;

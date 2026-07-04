@@ -1,0 +1,10 @@
+# NOTA: el kustomization principal ahora vive en k8s/kustomization.yaml
+# (kustomize no permite referenciar archivos fuera de su carpeta raiz).
+# Este archivo solo agrupa los recursos comunes de esta carpeta.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml

@@ -25,6 +25,39 @@ async function connectRabbit() {
   const q = await channel.assertQueue('vuelos.proceso.completado', { durable: true });
   await channel.bindQueue(q.queue, EXCHANGE, 'proceso.completado');
 
+  // Estado intermedio: marcar ASIGNADA cuando pistas asigna una pista
+  const qAsignada = await channel.assertQueue('vuelos.pista.asignada', { durable: true });
+  await channel.bindQueue(qAsignada.queue, EXCHANGE, 'pista.asignacion');
+
+  channel.consume(qAsignada.queue, async (msg) => {
+    if (!msg) return;
+    try {
+      const data = JSON.parse(msg.content.toString());
+      console.log('[Vuelos] AsignacionPista recibida:', data.vuelo_id, '- pista', data.pista_id);
+
+      await pool.query(
+        "UPDATE vuelos SET estado = 'ASIGNADA' WHERE vuelo_id = $1 AND estado = 'PENDIENTE'",
+        [data.vuelo_id]
+      );
+
+      const eventPayload = JSON.stringify({
+        evento: 'AsignacionPista',
+        vuelo_id: data.vuelo_id,
+        pista_id: data.pista_id,
+        estado: 'ASIGNADA'
+      });
+
+      sseClients.forEach((client) => {
+        client.write(`data: ${eventPayload}\n\n`);
+      });
+
+      channel.ack(msg);
+    } catch (err) {
+      console.error('[Vuelos] Error procesando AsignacionPista:', err);
+      channel.nack(msg, false, true);
+    }
+  });
+
   channel.consume(q.queue, async (msg) => {
     if (!msg) return;
     try {
@@ -107,17 +140,6 @@ app.get('/api/vuelos', async (req, res) => {
   }
 });
 
-app.get('/api/vuelos/:id', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM vuelos WHERE vuelo_id = $1', [req.params.id]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Vuelo no encontrado' });
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('[Vuelos] Error obteniendo vuelo:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.get('/api/vuelos/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -129,6 +151,17 @@ app.get('/api/vuelos/events', (req, res) => {
   req.on('close', () => {
     sseClients.delete(res);
   });
+});
+
+app.get('/api/vuelos/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM vuelos WHERE vuelo_id = $1', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Vuelo no encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('[Vuelos] Error obteniendo vuelo:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 async function start() {

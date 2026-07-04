@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-vuelos
+  namespace: grupo1
+spec:
+  schedule: "*/10 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:15-alpine
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: atc-secrets
+                      key: POSTGRES_PASSWORD
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  FECHA=$(date +%Y%m%d-%H%M%S)
+                  pg_dump -h postgres-vuelos -U atc -d vuelos > /backups/vuelos-$FECHA.sql
+                  # Retener solo los 18 respaldos mas recientes (~3 horas)
+                  ls -1t /backups/vuelos-*.sql | tail -n +19 | xargs -r rm
+                  echo "Backup vuelos-$FECHA.sql creado. Total: $(ls /backups/vuelos-*.sql | wc -l)"
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: backups-pvc

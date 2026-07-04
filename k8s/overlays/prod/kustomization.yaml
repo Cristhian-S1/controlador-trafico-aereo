@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: grupo1-prod
+
+resources:
+  - ../..
+  - ingress.yaml
+
+images:
+  - name: atc-vuelos
+    newName: ghcr.io/OWNER/atc-vuelos
+    newTag: TAG
+  - name: atc-pistas
+    newName: ghcr.io/OWNER/atc-pistas
+    newTag: TAG
+  - name: atc-tasas
+    newName: ghcr.io/OWNER/atc-tasas
+    newTag: TAG
+  - name: atc-gateway
+    newName: ghcr.io/OWNER/atc-gateway
+    newTag: TAG
+
+patches:
+  - path: image-pull-policy-patch.yaml
