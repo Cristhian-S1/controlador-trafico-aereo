@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+jobs:
+  lint:
+    name: Lint de estructura YAML
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar YAML
+        run: |
+          python3 - <<'PY'
+          import yaml, glob, sys
+          ok = True
+          for f in glob.glob('k8s/**/*.yaml', recursive=True) + glob.glob('.github/workflows/*.yml'):
+              try:
+                  with open(f) as fh:
+                      list(yaml.safe_load_all(fh))
+                  print(f'OK: {f}')
+              except Exception as e:
+                  print(f'ERROR: {f}: {e}')
+                  ok = False
+          sys.exit(0 if ok else 1)
+          PY
+
+  build:
+    name: Build de imagenes Docker
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: vuelos
+            context: ./services/vuelos
+            dockerfile: ./services/vuelos/Dockerfile
+          - service: pistas
+            context: ./services/pistas
+            dockerfile: ./services/pistas/Dockerfile
+          - service: tasas
+            context: ./services/tasas
+            dockerfile: ./services/tasas/Dockerfile
+          - service: gateway
+            context: .
+            dockerfile: ./nginx/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          tags: ghcr.io/${{ github.repository_owner }}/atc-${{ matrix.service }}:ci-${{ github.sha }}
