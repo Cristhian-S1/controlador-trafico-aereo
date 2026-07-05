@@ -1,0 +1,68 @@
+name: Deploy to PROD
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build images
+    strategy:
+      matrix:
+        include:
+          - service: vuelos
+          - service: pistas
+          - service: tasas
+          - service: gateway
+            context: .
+            dockerfile: ./nginx/Dockerfile
+    uses: ./.github/workflows/build-and-push.yml
+    with:
+      service: ${{ matrix.service }}
+      tag: ${{ github.sha }}
+      push: true
+      context: ${{ matrix.context || '' }}
+      dockerfile: ${{ matrix.dockerfile || '' }}
+
+# =======================================================
+# APAGADO TEMPORALMENTE HASTA TENER LA IP Y EL KUBECONFIG
+# =======================================================
+#  deploy:
+#    name: Deploy to PROD
+#    needs: build
+#    runs-on: ubuntu-latest
+#    environment: production
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#
+#      - name: Setup kubectl
+#        uses: azure/setup-kubectl@v3
+#        with:
+#          version: 'v1.29.0'
+#
+#      - name: Configure kubeconfig
+#        run: |
+#          mkdir -p ~/.kube
+#          echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > ~/.kube/config
+#
+#      - name: Setup Kustomize
+#        run: |
+#          curl -sLO https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.3.0/kustomize_v5.3.0_linux_amd64.tar.gz
+#          tar xzvf kustomize_v5.3.0_linux_amd64.tar.gz
+#          chmod +x kustomize
+#          sudo mv kustomize /usr/local/bin/
+#
+#      - name: Set image tags in PROD overlay
+#        run: |
+#          cd k8s/overlays/prod
+#          kustomize edit set image \
+#            atc-vuelos=ghcr.io/cristhian-s1/atc-vuelos:${{ github.sha }} \
+#            atc-pistas=ghcr.io/cristhian-s1/atc-pistas:${{ github.sha }} \
+#            atc-tasas=ghcr.io/cristhian-s1/atc-tasas:${{ github.sha }} \
+#            atc-gateway=ghcr.io/cristhian-s1/atc-gateway:${{ github.sha }}
+#
+#      - name: Deploy to PROD
+#        run: |
+#          kustomize build k8s/overlays/prod | kubectl apply -f -
+#          kubectl -n grupo1-prod wait --for=condition=Available deployment/postgres-vuelos deployment/postgres-pistas deployment/postgres-tasas deployment/rabbitmq deployment/vuelos deployment/pistas deployment/tasas deployment/gateway --timeout=180s
