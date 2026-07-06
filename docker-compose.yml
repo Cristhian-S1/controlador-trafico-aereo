@@ -121,6 +121,21 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  gateway:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: atc-gateway
+    ports:
+      - "80:80"
+    networks:
+      - atc-network
+    depends_on:
+      vuelos:
+        condition: service_started
+    restart: unless-stopped
+
+
 volumes:
   vuelos_data:
   pistas_data:
