@@ -32,7 +32,12 @@ replicas:
     count: 2
 
 patches:
-  - patch: |-
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: vuelos
+    patch: |-
       apiVersion: apps/v1
       kind: Deployment
       metadata:
@@ -43,7 +48,12 @@ patches:
             containers:
               - name: vuelos
                 imagePullPolicy: IfNotPresent
-  - patch: |-
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: pistas
+    patch: |-
       apiVersion: apps/v1
       kind: Deployment
       metadata:
@@ -54,7 +64,12 @@ patches:
             containers:
               - name: pistas
                 imagePullPolicy: IfNotPresent
-  - patch: |-
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: tasas
+    patch: |-
       apiVersion: apps/v1
       kind: Deployment
       metadata:
@@ -65,7 +80,12 @@ patches:
             containers:
               - name: tasas
                 imagePullPolicy: IfNotPresent
-  - patch: |-
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: gateway
+    patch: |-
       apiVersion: apps/v1
       kind: Deployment
       metadata:
