@@ -54,12 +54,18 @@ async function connectRabbit() {
   // channel.consume registra un callback que se dispara por cada mensaje que llegue a la cola.
   // Es asíncrono y long-running: este código queda "escuchando" indefinidamente, no es un fetch puntual.
   channel.consume(qAsignada.queue, async (msg) => {
-    if (!msg) return; // amqplib puede pasar null si el canal se cancela/cierra; hay que guardarse de eso.
+    if (!msg) return;
+    let data;
     try {
-      const data = JSON.parse(msg.content.toString()); // el body llega como Buffer, no como objeto
+      data = JSON.parse(msg.content.toString());
+    } catch {
+      console.error('[Vuelos] JSON invalido en AsignacionPista, descartando mensaje');
+      channel.ack(msg);
+      return;
+    }
+    try {
       console.log('[Vuelos] AsignacionPista recibida:', data.vuelo_id, '- pista', data.pista_id);
 
-      // Este es el cierre del ciclo: Tasas terminó de calcular el costo, así que el vuelo pasa a COMPLETADO.
       await pool.query(
         "UPDATE vuelos SET estado = 'ASIGNADA' WHERE vuelo_id = $1 AND estado = 'PENDIENTE'",
         [data.vuelo_id]
@@ -73,7 +79,6 @@ async function connectRabbit() {
         pista_id: data.pista_id,
         estado: 'ASIGNADA'
       });
-
       // Reenvía el evento a TODOS los clientes SSE conectados en este momento (broadcast simple en memoria).
       // Ojo: esto solo llega a los clientes conectados a ESTA instancia del pod; si escalas Vuelos a 2+ réplicas,
       // un cliente conectado al pod A no se entera de eventos consumidos por el pod B.
@@ -92,8 +97,15 @@ async function connectRabbit() {
 
   channel.consume(q.queue, async (msg) => {
     if (!msg) return;
+    let data;
     try {
-      const data = JSON.parse(msg.content.toString());
+      data = JSON.parse(msg.content.toString());
+    } catch {
+      console.error('[Vuelos] JSON invalido en ProcesoCompletado, descartando mensaje');
+      channel.ack(msg);
+      return;
+    }
+    try {
       console.log('[Vuelos] ProcesoCompletado recibido:', data.vuelo_id);
 
       await pool.query(

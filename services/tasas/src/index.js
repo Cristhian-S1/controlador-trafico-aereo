@@ -28,8 +28,15 @@ async function start() {
 
   ch.consume(q.queue, async (msg) => {
     if (!msg) return;
+    let data;
     try {
-      const data = JSON.parse(msg.content.toString());
+      data = JSON.parse(msg.content.toString());
+    } catch {
+      console.error('[Tasas] JSON invalido en AsignacionPista, descartando mensaje');
+      ch.ack(msg);
+      return;
+    }
+    try {
       console.log('[Tasas] AsignacionPista recibida:', data.vuelo_id, '- calculando tasas...');
 
       // Tiempo de procesamiento simulado (hace visible el estado ASIGNADA)

@@ -28,8 +28,15 @@ async function start() {
 
   ch.consume(q.queue, async (msg) => {
     if (!msg) return;
+    let data;
     try {
-      const data = JSON.parse(msg.content.toString());
+      data = JSON.parse(msg.content.toString());
+    } catch {
+      console.error('[Pistas] JSON invalido en SolicitudVuelo, descartando mensaje');
+      ch.ack(msg);
+      return;
+    }
+    try {
       console.log('[Pistas] SolicitudVuelo recibida:', data.vuelo_id);
 
       // FOR UPDATE bloquea las filas que devuelve el SELECT hasta que termine la transacción/query,
