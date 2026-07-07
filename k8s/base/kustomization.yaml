@@ -1,10 +1,60 @@
-# NOTA: el kustomization principal ahora vive en k8s/kustomization.yaml
-# (kustomize no permite referenciar archivos fuera de su carpeta raiz).
-# Este archivo solo agrupa los recursos comunes de esta carpeta.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+namespace: grupo1
+
+# Etiqueta comun en todos los pods para ver logs unificados:
+#   kubectl logs -n <ns> -l app.kubernetes.io/part-of=atc -f --prefix --all-containers
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: atc
+    includeSelectors: false
+    includeTemplates: true
 
 resources:
   - namespace.yaml
   - configmap.yaml
   - secrets.yaml
+  - ./postgres/vuelos/pvc.yaml
+  - ./postgres/vuelos/init-configmap.yaml
+  - ./postgres/vuelos/deployment.yaml
+  - ./postgres/vuelos/service.yaml
+  - ./postgres/pistas/pvc.yaml
+  - ./postgres/pistas/init-configmap.yaml
+  - ./postgres/pistas/deployment.yaml
+  - ./postgres/pistas/service.yaml
+  - ./postgres/tasas/pvc.yaml
+  - ./postgres/tasas/init-configmap.yaml
+  - ./postgres/tasas/deployment.yaml
+  - ./postgres/tasas/service.yaml
+  - ./rabbitmq/pvc.yaml
+  - ./rabbitmq/init-configmap.yaml
+  - ./rabbitmq/deployment.yaml
+  - ./rabbitmq/service.yaml
+  - ./rabbitmq/service-management.yaml
+  - ./apps/vuelos/deployment.yaml
+  - ./apps/vuelos/service.yaml
+  - ./apps/vuelos/hpa.yaml
+  - ./apps/pistas/deployment.yaml
+  - ./apps/pistas/service.yaml
+  - ./apps/tasas/deployment.yaml
+  - ./apps/tasas/service.yaml
+  - ./apps/gateway/deployment.yaml
+  - ./apps/gateway/service.yaml
+  - ./apps/gateway/hpa.yaml
+  - ./backups/pvc.yaml
+  - ./backups/cronjob-vuelos.yaml
+  - ./backups/cronjob-pistas.yaml
+  - ./backups/cronjob-tasas.yaml
+  - ./logging/loki-configmap.yaml
+  - ./logging/loki-pvc.yaml
+  - ./logging/loki-deployment.yaml
+  - ./logging/loki-service.yaml
+  - ./logging/promtail-configmap.yaml
+  - ./logging/promtail-rbac.yaml
+  - ./logging/promtail-daemonset.yaml
+  - ./logging/grafana-datasources.yaml
+  - ./logging/grafana-dashboard-provider.yaml
+  - ./logging/grafana-dashboard.yaml
+  - ./logging/grafana-deployment.yaml
+  - ./logging/grafana-service.yaml
