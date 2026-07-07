@@ -7,6 +7,9 @@ on:
 jobs:
   build:
     name: Build images
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         include:
