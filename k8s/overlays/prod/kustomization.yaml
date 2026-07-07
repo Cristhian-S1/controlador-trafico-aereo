@@ -9,17 +9,27 @@ resources:
 
 images:
   - name: atc-vuelos
-    newName: ghcr.io/OWNER/atc-vuelos
+    newName: ghcr.io/cristhian-s1/atc-vuelos
     newTag: TAG
   - name: atc-pistas
-    newName: ghcr.io/OWNER/atc-pistas
+    newName: ghcr.io/cristhian-s1/atc-pistas
     newTag: TAG
   - name: atc-tasas
-    newName: ghcr.io/OWNER/atc-tasas
+    newName: ghcr.io/cristhian-s1/atc-tasas
     newTag: TAG
   - name: atc-gateway
-    newName: ghcr.io/OWNER/atc-gateway
+    newName: ghcr.io/cristhian-s1/atc-gateway
     newTag: TAG
+
+replicas:
+  - name: vuelos
+    count: 2
+  - name: pistas
+    count: 2
+  - name: tasas
+    count: 2
+  - name: gateway
+    count: 2
 
 patches:
   - path: image-pull-policy-patch.yaml
