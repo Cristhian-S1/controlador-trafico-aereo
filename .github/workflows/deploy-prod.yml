@@ -30,7 +30,7 @@ jobs:
   deploy:
     name: Deploy to PROD
     needs: build
-    runs-on: self-hosted  # antes: ubuntu-latest
+    runs-on: ubuntu-latest
     environment: production
     steps:
       - name: Checkout

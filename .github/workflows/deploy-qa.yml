@@ -30,7 +30,7 @@ jobs:
   deploy:
     name: Deploy to QA
     needs: build
-    runs-on: self-hosted # antes: ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
