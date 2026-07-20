@@ -30,27 +30,23 @@ jobs:
   deploy:
     name: Deploy to QA
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'v1.29.0'
 
       - name: Configure kubeconfig
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG_QA }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
 
       - name: Setup Kustomize
         run: |
           curl -sLO https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.3.0/kustomize_v5.3.0_linux_amd64.tar.gz
-          tar xzvf kustomize_v5.3.0_linux_amd64.tar.gz
+          tar xzf kustomize_v5.3.0_linux_amd64.tar.gz
           chmod +x kustomize
-          sudo mv kustomize /usr/local/bin/
+          echo "$PWD" >> "$GITHUB_PATH"
 
       - name: Set image tags in QA overlay
         run: |
@@ -64,4 +60,4 @@ jobs:
       - name: Deploy to QA
         run: |
           kustomize build k8s/overlays/qa | kubectl apply -f -
-          kubectl -n grupo1-qa wait --for=condition=Available deployment/postgres-vuelos deployment/postgres-pistas deployment/postgres-tasas deployment/rabbitmq deployment/vuelos deployment/pistas deployment/tasas deployment/gateway --timeout=180s
+          kubectl -n grupo1-qa wait --for=condition=Available deployment/postgres-vuelos deployment/postgres-pistas deployment/postgres-tasas deployment/rabbitmq deployment/vuelos deployment/pistas deployment/tasas deployment/gateway --timeout=300s
