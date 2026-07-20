@@ -1,92 +1,8 @@
-# Controlador de Trafico Aereo (ATC)
+# Controlador de Trafico Aereo (ATC) — Grupo 1
 
-Proyecto final de Aplicaciones Distribuidas — Grupo 1. Sistema de microservicios para la gestion automatizada de aterrizajes, asignacion de pistas y calculo de tasas aeroportuarias.
+Proyecto final de Aplicaciones Distribuidas. Sistema de microservicios para la gestion automatizada de aterrizajes, asignacion de pistas y calculo de tasas aeroportuarias, con comunicacion asincrona via RabbitMQ, despliegue automatizado con GitHub Actions y orquestacion en Kubernetes/K3s sobre los servidores PowerEdge del departamento.
 
----
-
-## Flujo
-
-El sistema se compone de **3 microservicios** que se comunican de forma asincrona via RabbitMQ (exchange `atc.exchange` de tipo `topic`):
-
-| Servicio | Rol | HTTP | Puertos |
-|----------|-----|------|---------|
-| **Gestion de Vuelos** | API REST + consumidor de eventos + SSE | `POST /api/vuelos`, `GET /api/vuelos`, `GET /api/vuelos/events` | `:3001` |
-| **Asignacion de Pistas** | Solo consumidor/publicador de eventos | No tiene | Solo red interna |
-| **Gestion de Tasas** | Solo consumidor/publicador de eventos | No tiene | Solo red interna |
-
-### Paso a paso
-
-1. Se envia un `POST /api/vuelos` al **Servicio de Vuelos** (`:3001`) con los datos del vuelo.
-2. El servicio registra el vuelo en **PostgreSQL (vuelos)** con estado `PENDIENTE` y publica un evento en RabbitMQ con routing key `vuelo.solicitud`.
-3. El **Servicio de Pistas** consume el evento (`vuelo.solicitud`), busca una pista libre en **PostgreSQL (pistas)**, la marca como `OCUPADA` y publica un evento con routing key `pista.asignacion`.
-4. El **Servicio de Tasas** consume el evento (`pista.asignacion`), calcula los costos (aterrizaje + estacionamiento) segun el tipo de pista, los registra en **PostgreSQL (tasas)** y publica un evento con routing key `proceso.completado`.
-5. El **Servicio de Vuelos** consume el evento (`proceso.completado`), actualiza el estado del vuelo a `COMPLETADO` y notifica a los clientes SSE (Server-Sent Events) conectados a `GET /api/vuelos/events`.
-
----
-
-## Stack Tecnologico
-
-| Capa | Tecnologia |
-|---|---|
-| Backend | Node.js + Express |
-| Frontend | Next.js |
-| API Gateway | Nginx |
-| Message Broker | RabbitMQ |
-| Bases de Datos | PostgreSQL (1 por microservicio) |
-| Contenedores | Docker (imagenes node:18-alpine) |
-| Orquestacion | Kubernetes / K3s |
-| CI/CD | GitHub Actions (ramas develop y main) |
-
----
-
-## Ejecucion Local con Docker Compose
-
-Levanta los 3 PostgreSQL, RabbitMQ y los 3 microservicios:
-
-```bash
-docker compose up -d
-```
-
-Para ver los logs de todos los servicios:
-
-```bash
-docker compose logs -f
-```
-
-Para detener y eliminar los contenedores:
-
-```bash
-docker compose down
-```
-
-### Conexion a las Bases de Datos
-
-Cada microservicio tiene su propia base de datos PostgreSQL expuesta en un puerto distinto:
-
-| Base | Puerto | Usuario | Password | Database |
-|------|--------|---------|----------|----------|
-| vuelos | `5432` | `atc` | `atc123` | `vuelos` |
-| pistas | `5433` | `atc` | `atc123` | `pistas` |
-| tasas  | `5434` | `atc` | `atc123` | `tasas`  |
-
-Ejemplo de conexion con `psql`:
-
-```bash
-psql -h localhost -p 5432 -U atc -d vuelos
-```
-
-RabbitMQ management console: `http://localhost:15672` (usuario: `guest`, password: `guest`)
-
----
-
-## Repositorio
-
-- *Rama develop*: despliegues automaticos a QA (qa.grupo1.uta.cl)
-- *Rama main*: despliegues automaticos a PROD (prod.grupo1.uta.cl)
-
----
-
-## Integrantes — Grupo 1
+Integrantes — Grupo 1:
 
 | Nombre | Rol |
 |---|---|
@@ -94,3 +10,293 @@ RabbitMQ management console: `http://localhost:15672` (usuario: `guest`, passwor
 | Fernanda Javiera Ventura Briceno | Frontend |
 | Sebastian Alejandro Torres Santibanez | API Gateway |
 | Cristhian Manuel Sanchez Femayor | Database |
+
+---
+
+## 1. Diagrama Arquitectonico
+
+Camino del mensaje a traves de los tres servicios logicos y el broker de mensajería. El unico punto de entrada publico es el API Gateway (Nginx); los servicios `pistas` y `tasas` no exponen HTTP, solo reaccionan a eventos.
+
+```mermaid
+flowchart LR
+    subgraph Publico
+        Piloto[Piloto / Frontend Next.js]
+    end
+
+    subgraph Gateway
+        NGINX[API Gateway<br/>Nginx :80]
+    end
+
+    subgraph Bus[Message Broker - RabbitMQ exchange topic 'atc.exchange']
+        Q1[(cola vuelo.solicitud)]
+        Q2[(cola pista.asignacion)]
+        Q3[(cola proceso.completado)]
+    end
+
+    subgraph S1[Servicio 1 - Gestion de Vuelos - REST + Eventos]
+        V1[vuelos :3001<br/>POST /api/vuelos<br/>GET /api/vuelos<br/>SSE /api/vuelos/events]
+        PG1[(PostgreSQL vuelos)]
+    end
+
+    subgraph S2[Servicio 2 - Asignacion de Pistas - Event Driven]
+        P1[pistas<br/>solo consumidor/publicador]
+        PG2[(PostgreSQL pistas)]
+    end
+
+    subgraph S3[Servicio 3 - Gestion de Tasas - Event Driven]
+        T1[tasas<br/>solo consumidor/publicador]
+        PG3[(PostgreSQL tasas)]
+    end
+
+    Piloto -->|HTTP POST /api/vuelos| NGINX
+    NGINX -->|proxy /api/| V1
+    V1 -->|persiste PENDIENTE| PG1
+    V1 -->|publica vuelo.solicitud| Q1
+    Q1 --> P1
+    P1 -->|busca LIBRE / marca OCUPADA| PG2
+    P1 -->|publica pista.asignacion| Q2
+    Q2 --> T1
+    Q2 -->|estado ASIGNADA + SSE| V1
+    T1 -->|calcula costos| PG3
+    T1 -->|publica proceso.completado| Q3
+    Q3 --> V1
+    V1 -->|estado COMPLETADO| PG1
+    V1 -.->|SSE broadcast| Piloto
+```
+
+**Secuencia del flujo:**
+
+1. El piloto envia `POST /api/vuelos` al gateway (dominio `qa.grupo1.uta.cl` o `prod.grupo1.uta.cl`).
+2. `vuelos` registra el vuelo en `PostgreSQL vuelos` con estado `PENDIENTE` y publica `vuelo.solicitud`.
+3. `pistas` consume `vuelo.solicitud`, busca la primera pista `LIBRE` en su base, la marca `OCUPADA` y publica `pista.asignacion`.
+4. `vuelos` consume `pista.asignacion`, actualiza el estado a `ASIGNADA` y notifica al frontend por SSE.
+5. `tasas` consume `pista.asignacion`, calcula costos segun tipo de pista, los registra y publica `proceso.completado`.
+6. `vuelos` consume `proceso.completado`, actualiza a `COMPLETADO` y hace broadcast por SSE a los clientes conectados a `/api/vuelos/events`.
+
+> El resultado del diagrama tambien esta exportado como editable en `db/vuelos/vuelos.drawio`, `db/pistas/pistas.drawio` y `db/tasas/tasas.drawio`.
+
+---
+
+## 2. Contrato de Datos
+
+Tres eventos viajan por el exchange topic `atc.exchange` (RabbitMQ). Todas las cargas son JSON en UTF-8. Las `routing key` son jerarquicas y los servicios las vinculan a colas durables nombradas.
+
+### Evento 1 — SolicitudVuelo  (routing key `vuelo.solicitud`)
+
+Publicado por `vuelos` tras recibir `POST /api/vuelos`. Consumido por `pistas`.
+
+```json
+{
+  "evento": "SolicitudVuelo",
+  "vuelo_id": "ATC-001",
+  "aerolinea": "LATAM",
+  "numero_vuelo": "LA1234",
+  "origen": "SCL",
+  "destino": "ARI",
+  "aeronave": "A320",
+  "pasajeros": 150,
+  "timestamp": "2026-07-20T12:00:00.000Z",
+  "estado": "PENDIENTE"
+}
+```
+
+### Evento 2 — AsignacionPista  (routing key `pista.asignacion`)
+
+Publicado por `pistas` tras reservar la pista. Consumido por `tasas` y por `vuelos` (para setear estado `ASIGNADA` y notificar SSE).
+
+```json
+{
+  "evento": "AsignacionPista",
+  "vuelo_id": "ATC-001",
+  "pista_id": "P03",
+  "tipo_pista": "COMERCIAL",
+  "timestamp": "2026-07-20T12:00:01.500Z"
+}
+```
+
+### Evento 3 — ProcesoCompletado  (routing key `proceso.completado`)
+
+Publicado por `tasas` tras registrar el cobro. Consumido por `vuelos` para cerrar el flujo.
+
+```json
+{
+  "evento": "ProcesoCompletado",
+  "vuelo_id": "ATC-001",
+  "pista_id": "P03",
+  "tasa": {
+    "aterrizaje": 250,
+    "estacionamiento": 50,
+    "moneda": "USD",
+    "total": 300
+  },
+  "timestamp": "2026-07-20T12:00:02.800Z"
+}
+```
+
+### Reglas de tarificacion (servicio `tasas`)
+
+| Tipo de pista | Aterrizaje (USD) | Estacionamiento (USD) | Total (USD) |
+|---|---|---|---|
+| COMERCIAL | 250 | 50 | 300 |
+| CARGA     | 200 | 80 | 280 |
+| PRIVADO   | 150 | 30 | 180 |
+
+### Estructura del vuelo (PostgreSQL `vuelos`)
+
+`vuelo_id` (PK, string), `aerolinea`, `numero_vuelo`, `origen`, `destino`, `aeronave`, `pasajeros` (int), `estado` (`PENDIENTE` → `ASIGNADA` → `COMPLETADO`), `timestamp_solicitud`.
+
+### Estructura de pista (PostgreSQL `pistas`)
+
+`pista_id` (PK), `tipo` (`COMERCIAL`/`CARGA`/`PRIVADO`), `estado` (`LIBRE`/`OCUPADA`).
+
+### Estructura de tasa (PostgreSQL `tasas`)
+
+`tasa_id` (PK autoincrement), `vuelo_id` (FK logico), `pista_id`, `tipo_pista`, `aterrizaje`, `estacionamiento`, `total`, `moneda`, `timestamp`.
+
+---
+
+## 3. Guia de Configuracion de Acceso (archivo `hosts`)
+
+Queda prohibido el acceso por IP:puerto. El sistema resuelve por nombres de dominio virtuales `.uta.cl` mediante el Ingress de Traefik (incluido con K3s). En la maquina del evaluador, apuntar ambos dominios a la IP del servidor K3s (VM1 del grupo):
+
+### Linux / macOS
+```bash
+sudo tee -a /etc/hosts <<EOF
+146.83.102.20 qa.grupo1.uta.cl
+146.83.102.20 prod.grupo1.uta.cl
+EOF
+```
+
+### Windows (PowerShell como administrador)
+```powershell
+Add-Content C:\Windows\System32\drivers\etc\hosts "`n146.83.102.20 qa.grupo1.uta.cl"
+Add-Content C:\Windows\System32\drivers\etc\hosts "`n146.83.102.20 prod.grupo1.uta.cl"
+```
+
+Verificar:
+```bash
+ping qa.grupo1.uta.cl        # debe responder 146.83.102.20
+curl http://qa.grupo1.uta.cl # debe devolver el frontend
+```
+
+> Si otro grupo usa el mismo clúster K3s, no hay conflicto: cada dominio es distinto y Traefik enruta por `host`.
+
+---
+
+## 4. Manual Operativo de Control
+
+Comandos indispensables para revisar el estado del sistema, los logs unificados y certificar que las copias de seguridad persisten.
+
+### Estado general del sistema
+```bash
+kubectl -n grupo1-qa get pods,svc,ingress                # QA  (cambiar a grupo1-prod para PROD)
+kubectl -n grupo1-qa get deployments
+kubectl -n grupo1-qa top pods                             # requiere metrics-server (opcional)
+```
+
+### Logs unificados (todas las trazas en una sola vista)
+```bash
+./scripts/logs-unificados.sh grupo1-qa                    # sigue en stream (-f)
+# Equivalente interno:
+kubectl -n grupo1-qa logs -l app.kubernetes.io/part-of=atc --all-containers --prefix -f --max-log-requests 20
+```
+
+### Probar el flujo extremo a extremo
+```bash
+curl -X POST http://qa.grupo1.uta.cl/api/vuelos \
+  -H "Content-Type: application/json" \
+  -d '{"vuelo_id":"ATC-QA-001","aerolinea":"LATAM","numero_vuelo":"LA1234","origen":"SCL","destino":"ARI","aeronave":"A320","pasajeros":150}'
+
+sleep 5
+curl http://qa.grupo1.uta.cl/api/vuelos/ATC-QA-001         # estado: COMPLETADO
+curl http://qa.grupo1.uta.cl/api/vuelos                    # historial completo
+```
+
+### Verificar persistencia de datos (caida y reinicio de un pod de BD)
+```bash
+kubectl -n grupo1-qa delete pod -l app=postgres-vuelos     # elimina el pod; el Deployment lo recrea
+# el PVC conserva los datos: al volver a levantar, el historial de vuelos sigue intacto
+kubectl -n grupo1-qa exec deployment/postgres-vuelos -- psql -U atc -d vuelos -c "SELECT COUNT(*) FROM vuelos;"
+```
+
+### Verificar respaldos automaticos (CronJob cada 10 minutos)
+```bash
+kubectl -n grupo1-qa get cronjobs
+kubectl -n grupo1-qa get jobs --sort-by=.metadata.creationTimestamp
+kubectl -n grupo1-qa logs -l job-name --tail=20
+
+# Listar los archivos de respaldo en el PVC compartido (montado en /backups)
+kubectl -n grupo1-qa exec deployment/postgres-vuelos -- ls -la /backups
+# Para restaurar manualmente un respaldo (escenario de resiliencia):
+# kubectl -n grupo1-qa exec -i deployment/postgres-vuelos -- \
+#   psql -U atc -d vuelos < /backups/vuelos-<fecha>.sql
+```
+
+### Forzar un deploy desde CI
+- `git push origin develop` -> deploy automatico a QA
+- `git push origin main`    -> deploy automatico a PROD
+- Seguir en GitHub Actions (tab Actions) los jobs `Build and Push` y `Deploy to QA` / `Deploy to PROD`.
+
+### Resumen de puertos / conexiones
+| Base | Servicio interno | Puerto interno | Usuario | Password |
+|---|---|---|---|---|
+| vuelos | postgres-vuelos | 5432 | atc | atc123 |
+| pistas | postgres-pistas | 5432 | atc | atc123 |
+| tasas  | postgres-tasas  | 5432 | atc | atc123 |
+| RabbitMQ AMQP | rabbitmq | 5672 | guest | guest |
+
+Ningun puerto NodePort se expone al publico. El acceso es exclusivamente por dominio via Ingress en el puerto 80.
+
+---
+
+## Stack Tecnologico
+
+| Capa | Tecnologia |
+|---|---|
+| Backend | Node.js 18-alpine + Express |
+| Frontend | Next.js 14 (App Router) |
+| API Gateway | Nginx (proxy /api + estatico) |
+| Message Broker | RabbitMQ 3 (exchange topic `atc.exchange`) |
+| Bases de Datos | PostgreSQL 15-alpine, una por microservicio |
+| Orquestacion | Kubernetes (K3s) con Kustomize |
+| CI/CD | GitHub Actions (develop -> QA, main -> PROD) |
+| Registro de imagenes | GHCR (ghcr.io/cristhian-s1/atc-*) |
+
+---
+
+## Ejecucion Local con Docker Compose (sin cluster)
+
+```bash
+docker compose up -d          # 3 PostgreSQL + RabbitMQ + 3 servicios + gateway
+docker compose logs -f
+docker compose down
+```
+
+URLs locales: API `http://localhost:3001/api/vuelos`, RabbitMQ Management `http://localhost:15672` (guest/guest).
+
+---
+
+## Reglas de Commits / CI
+
+- La rama `develop` despliega automaticamente a `grupo1-qa` (qa.grupo1.uta.cl).
+- La rama `main` despliega automaticamente a `grupo1-prod` (prod.grupo1.uta.cl).
+- Esta prohibido el acceso manual a los servidores para desplegar; todo pasa por GitHub Actions.
+- Secretos requeridos en el repo: `KUBECONFIG_QA`, `KUBECONFIG_PROD` (contenido kubeconfig en base64).
+
+---
+
+## Estructura del repositorio
+
+```
+controlador-trafico-aereo-develop/
+├── services/{vuelos,pistas,tasas}/   # 3 microservicios Express (1 archivo src/index.js c/u)
+├── frontend/                         # Next.js 14 - panel del piloto + SSE
+├── nginx/                            # Dockerfile multi-stage + nginx.conf (gateway)
+├── db/{vuelos,pistas,tasas}/         # schema.sql + diagrama .drawio por servicio
+├── k8s/
+│   ├── base/                         # namespace, configmap, secrets, postgres, rabbitmq, apps, backups
+│   └── overlays/{qa,prod}/           # kustomization + ingress por dominio
+├── scripts/logs-unificados.sh        # vista unificada de logs
+├── docker-compose.yml                # entorno local
+└── .github/workflows/                # ci.yml, build-and-push.yml, deploy-qa.yml, deploy-prod.yml
+```

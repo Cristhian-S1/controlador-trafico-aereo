@@ -21,9 +21,10 @@ images:
     newName: ghcr.io/cristhian-s1/atc-gateway
     newTag: qa-TAG
 
+# vuelos queda en 1 replica: el broadcast SSE es en memoria por pod.
+# Si escalas a 2+ replicas, un cliente conectado a un pod no recibira
+# los eventos consumidos por el otro pod. pistas/tasas/gateway si escalan.
 replicas:
-  - name: vuelos
-    count: 2
   - name: pistas
     count: 2
   - name: tasas
