@@ -1,0 +1,99 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: grupo1-prod
+
+resources:
+  - ../../base
+  - ingress.yaml
+
+images:
+  - name: atc-vuelos
+    newName: ghcr.io/cristhian-s1/atc-vuelos
+    newTag: TAG
+  - name: atc-pistas
+    newName: ghcr.io/cristhian-s1/atc-pistas
+    newTag: TAG
+  - name: atc-tasas
+    newName: ghcr.io/cristhian-s1/atc-tasas
+    newTag: TAG
+  - name: atc-gateway
+    newName: ghcr.io/cristhian-s1/atc-gateway
+    newTag: TAG
+
+# vuelos queda en 1 replica: el broadcast SSE es en memoria por pod.
+# Si escalas a 2+ replicas, un cliente conectado a un pod no recibira
+# los eventos consumidos por el otro pod. pistas/tasas/gateway si escalan.
+replicas:
+  - name: pistas
+    count: 2
+  - name: tasas
+    count: 2
+  - name: gateway
+    count: 2
+
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: vuelos
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: vuelos
+      spec:
+        template:
+          spec:
+            containers:
+              - name: vuelos
+                imagePullPolicy: IfNotPresent
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: pistas
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: pistas
+      spec:
+        template:
+          spec:
+            containers:
+              - name: pistas
+                imagePullPolicy: IfNotPresent
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: tasas
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: tasas
+      spec:
+        template:
+          spec:
+            containers:
+              - name: tasas
+                imagePullPolicy: IfNotPresent
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: gateway
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: gateway
+      spec:
+        template:
+          spec:
+            containers:
+              - name: gateway
+                imagePullPolicy: IfNotPresent

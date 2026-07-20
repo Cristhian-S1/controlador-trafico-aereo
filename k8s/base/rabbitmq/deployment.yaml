@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  namespace: grupo1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:3-management-alpine
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: atc-secrets
+                  key: RABBITMQ_DEFAULT_USER
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: atc-secrets
+                  key: RABBITMQ_DEFAULT_PASS
+            - name: RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS
+              value: "-rabbitmq_management load_definitions \"/etc/rabbitmq/definitions.json\""
+          ports:
+            - containerPort: 5672
+            - containerPort: 15672
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+            - name: definitions
+              mountPath: /etc/rabbitmq/definitions.json
+              subPath: definitions.json
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "400m"
+              memory: "512Mi"
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "ping"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: rabbitmq-pvc
+        - name: definitions
+          configMap:
+            name: rabbitmq-definitions

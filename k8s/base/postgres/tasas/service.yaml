@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-tasas
+  namespace: grupo1
+spec:
+  selector:
+    app: postgres-tasas
+  ports:
+    - port: 5432
+      targetPort: 5432

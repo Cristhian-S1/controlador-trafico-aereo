@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tasas
+  namespace: grupo1
+spec:
+  selector:
+    app: tasas
+  ports:
+    - port: 3003
+      targetPort: 3003

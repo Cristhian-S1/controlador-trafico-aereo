@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-definitions
+  namespace: grupo1
+data:
+  definitions.json: |
+    {
+      "rabbit_version": "3.11",
+      "users": [
+        {
+          "name": "guest",
+          "password_hash": "OG1qUqM1Oq6zED7S4OyxsXZDLqFfwtHCLgy912rb8WsXf06I",
+          "hashing_algorithm": "rabbit_password_hashing_sha256",
+          "tags": ["administrator"]
+        }
+      ],
+      "permissions": [
+        {"user": "guest", "vhost": "/", "configure": ".*", "write": ".*", "read": ".*"}
+      ],
+      "vhosts": [{"name": "/"}],
+      "exchanges": [
+        {
+          "name": "atc.exchange",
+          "vhost": "/",
+          "type": "topic",
+          "durable": true,
+          "auto_delete": false,
+          "internal": false,
+          "arguments": {}
+        }
+      ],
+      "queues": [
+        {"name": "vuelos.proceso.completado", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
+        {"name": "pistas.solicitud.vuelo", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
+        {"name": "tasas.asignacion.pista", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
+        {"name": "pistas.proceso.completado", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
+        {"name": "vuelos.pista.asignada", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}}
+      ],
+      "bindings": [
+        {"source": "atc.exchange", "vhost": "/", "destination": "vuelos.proceso.completado", "destination_type": "queue", "routing_key": "proceso.completado", "arguments": {}},
+        {"source": "atc.exchange", "vhost": "/", "destination": "pistas.solicitud.vuelo", "destination_type": "queue", "routing_key": "vuelo.solicitud", "arguments": {}},
+        {"source": "atc.exchange", "vhost": "/", "destination": "tasas.asignacion.pista", "destination_type": "queue", "routing_key": "pista.asignacion", "arguments": {}},
+        {"source": "atc.exchange", "vhost": "/", "destination": "pistas.proceso.completado", "destination_type": "queue", "routing_key": "proceso.completado", "arguments": {}},
+        {"source": "atc.exchange", "vhost": "/", "destination": "vuelos.pista.asignada", "destination_type": "queue", "routing_key": "pista.asignacion", "arguments": {}}
+      ]
+    }

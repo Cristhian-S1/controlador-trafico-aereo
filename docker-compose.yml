@@ -1,0 +1,146 @@
+services:
+  postgres-vuelos:
+    image: postgres:15-alpine
+    container_name: atc-postgres-vuelos
+    environment:
+      POSTGRES_DB: vuelos
+      POSTGRES_USER: atc
+      POSTGRES_PASSWORD: atc123
+    ports:
+      - "5432:5432"
+    volumes:
+      - vuelos_data:/var/lib/postgresql/data
+      - ./db/vuelos/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - atc-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atc -d vuelos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-pistas:
+    image: postgres:15-alpine
+    container_name: atc-postgres-pistas
+    environment:
+      POSTGRES_DB: pistas
+      POSTGRES_USER: atc
+      POSTGRES_PASSWORD: atc123
+    ports:
+      - "5433:5432"
+    volumes:
+      - pistas_data:/var/lib/postgresql/data
+      - ./db/pistas/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - atc-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atc -d pistas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-tasas:
+    image: postgres:15-alpine
+    container_name: atc-postgres-tasas
+    environment:
+      POSTGRES_DB: tasas
+      POSTGRES_USER: atc
+      POSTGRES_PASSWORD: atc123
+    ports:
+      - "5434:5432"
+    volumes:
+      - tasas_data:/var/lib/postgresql/data
+      - ./db/tasas/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - atc-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atc -d tasas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: atc-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - atc-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  vuelos:
+    build: ./services/vuelos
+    container_name: atc-vuelos
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgres://atc:atc123@postgres-vuelos:5432/vuelos
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "3001:3001"
+    networks:
+      - atc-network
+    depends_on:
+      postgres-vuelos:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  pistas:
+    build: ./services/pistas
+    container_name: atc-pistas
+    environment:
+      DATABASE_URL: postgres://atc:atc123@postgres-pistas:5432/pistas
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    networks:
+      - atc-network
+    depends_on:
+      postgres-pistas:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  tasas:
+    build: ./services/tasas
+    container_name: atc-tasas
+    environment:
+      DATABASE_URL: postgres://atc:atc123@postgres-tasas:5432/tasas
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    networks:
+      - atc-network
+    depends_on:
+      postgres-tasas:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: atc-gateway
+    ports:
+      - "80:80"
+    networks:
+      - atc-network
+    depends_on:
+      vuelos:
+        condition: service_started
+    restart: unless-stopped
+
+
+volumes:
+  vuelos_data:
+  pistas_data:
+  tasas_data:
+
+networks:
+  atc-network:
+    driver: bridge

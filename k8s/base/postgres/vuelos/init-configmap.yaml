@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-vuelos-init
+  namespace: grupo1
+data:
+  01-schema.sql: |
+    CREATE TABLE IF NOT EXISTS vuelos (
+        vuelo_id VARCHAR(32) PRIMARY KEY,
+        aerolinea VARCHAR(50) NOT NULL,
+        numero_vuelo VARCHAR(20) NOT NULL,
+        origen VARCHAR(10) NOT NULL,
+        destino VARCHAR(10) NOT NULL,
+        aeronave VARCHAR(20) NOT NULL,
+        pasajeros INTEGER NOT NULL CHECK (pasajeros >= 0),
+        timestamp_solicitud TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE'
+            CHECK (estado IN ('PENDIENTE', 'ASIGNADA', 'COMPLETADO'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_vuelos_estado ON vuelos(estado);

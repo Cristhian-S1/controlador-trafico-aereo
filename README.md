@@ -1,154 +1,251 @@
-# Controlador de Trafico Aereo (ATC)
+# Controlador de Trafico Aereo (ATC) — Grupo 1
 
-Proyecto final de Aplicaciones Distribuidas — Grupo 1. Sistema de microservicios para la gestion automatizada de aterrizajes, asignacion de pistas y calculo de tasas aeroportuarias.
+Proyecto final de Aplicaciones Distribuidas. Sistema de microservicios para la gestion automatizada de aterrizajes, asignacion de pistas y calculo de tasas aeroportuarias, con comunicacion asincrona via RabbitMQ, despliegue automatizado con GitHub Actions y orquestacion en Kubernetes/K3s sobre los servidores PowerEdge del departamento.
+
+Integrantes — Grupo 1:
+
+| Nombre | Rol |
+|---|---|
+| Katalina Ignacia Oviedo Diaz | Backend |
+| Fernanda Javiera Ventura Briceno | Frontend |
+| Sebastian Alejandro Torres Santibanez | API Gateway |
+| Cristhian Manuel Sanchez Femayor | Database |
 
 ---
 
 ## 1. Diagrama Arquitectonico
 
+Camino del mensaje a traves de los tres servicios logicos y el broker de mensajería. El unico punto de entrada publico es el API Gateway (Nginx); los servicios `pistas` y `tasas` no exponen HTTP, solo reaccionan a eventos.
+
 ```mermaid
-graph TB
-    subgraph Frontend["Frontend"]
-        UI["Panel de Control ATC<br/>Next.js"]
+flowchart LR
+    subgraph Publico
+        Piloto[Piloto / Frontend Next.js]
     end
 
-    subgraph Gateway["Capa de Entrada"]
-        NGINX["API Gateway<br/>Nginx<br/>qa.grupo1.uta.cl / prod.grupo1.uta.cl"]
+    subgraph Gateway
+        NGINX[API Gateway<br/>Nginx :80]
     end
 
-    subgraph Servicios["Microservicios — Node.js + Express (Alpine Linux)"]
-        direction LR
-        S1["Servicio 1<br/>Gestion de Vuelos<br/>REST + Eventos<br/>Puerto :3001"]
-
-        RMQ["RabbitMQ<br/>Exchange: atc.exchange (topic)<br/>Puerto :5672 / Management :15672"]
-
-        S2["Servicio 2<br/>Asignacion de Pistas<br/>Event Driven<br/>Puerto :3002"]
-        S3["Servicio 3<br/>Gestion de Tasas<br/>Event Driven<br/>Puerto :3003"]
+    subgraph Bus[Message Broker - RabbitMQ exchange topic 'atc.exchange']
+        Q1[(cola vuelo.solicitud)]
+        Q2[(cola pista.asignacion)]
+        Q3[(cola proceso.completado)]
     end
 
-
-    subgraph Bases["Bases de Datos — PostgreSQL (Alpine)"]
-        DB1[("DB Vuelos<br/>Puerto :5432")]
-        DB2[("DB Pistas<br/>Puerto :5433")]
-        DB3[("DB Tasas<br/>Puerto :5434")]
+    subgraph S1[Servicio 1 - Gestion de Vuelos - REST + Eventos]
+        V1[vuelos :3001<br/>POST /api/vuelos<br/>GET /api/vuelos<br/>SSE /api/vuelos/events]
+        PG1[(PostgreSQL vuelos)]
     end
 
-    UI -->|"HTTP /vuelos"| NGINX
-    NGINX -->|"POST /api/vuelos"| S1
-    S1 -->|"1. Publica SolicitudVuelo"| RMQ
-    S1 -->|"Registra vuelo"| DB1
-    RMQ -->|"2. Consume SolicitudVuelo"| S2
-    S2 -->|"Consulta pistas libres"| DB2
-    S2 -->|"3. Publica AsignacionPista"| RMQ
-    RMQ -->|"4. Consume AsignacionPista"| S3
-    S3 -->|"Registra tasa"| DB3
-    S3 -->|"5. Publica ProcesoCompletado"| RMQ
-    RMQ -->|"6. Consume ProcesoCompletado"| S1
-    S1 -->|"Actualiza estado"| DB1
-    S1 -->|"SSE — Confirmacion"| NGINX
-    NGINX -->|"Actualizacion en tiempo real"| UI
+    subgraph S2[Servicio 2 - Asignacion de Pistas - Event Driven]
+        P1[pistas<br/>solo consumidor/publicador]
+        PG2[(PostgreSQL pistas)]
+    end
+
+    subgraph S3[Servicio 3 - Gestion de Tasas - Event Driven]
+        T1[tasas<br/>solo consumidor/publicador]
+        PG3[(PostgreSQL tasas)]
+    end
+
+    Piloto -->|HTTP POST /api/vuelos| NGINX
+    NGINX -->|proxy /api/| V1
+    V1 -->|persiste PENDIENTE| PG1
+    V1 -->|publica vuelo.solicitud| Q1
+    Q1 --> P1
+    P1 -->|busca LIBRE / marca OCUPADA| PG2
+    P1 -->|publica pista.asignacion| Q2
+    Q2 --> T1
+    Q2 -->|estado ASIGNADA + SSE| V1
+    T1 -->|calcula costos| PG3
+    T1 -->|publica proceso.completado| Q3
+    Q3 --> V1
+    V1 -->|estado COMPLETADO| PG1
+    V1 -.->|SSE broadcast| Piloto
 ```
 
-### Flujo
+**Secuencia del flujo:**
 
-1. Un **piloto** (o el frontend simulandolo) envia una solicitud de aterrizaje via REST al API Gateway.
-2. El **Servicio 1 (Gestion de Vuelos)** recibe la peticion, registra el vuelo en su base de datos y publica el evento `SolicitudVuelo` en RabbitMQ.
-3. El **Servicio 2 (Asignacion de Pistas)** consume el evento, consulta su base de datos de pistas, selecciona una pista libre y publica el evento `AsignacionPista`.
-4. El **Servicio 3 (Gestion de Tasas)** consume `AsignacionPista`, calcula los costos operativos del aterrizaje, los registra y publica `ProcesoCompletado`.
-5. El **Servicio 1** consume `ProcesoCompletado`, actualiza el estado del vuelo y notifica al frontend via SSE (Server-Sent Events) que el proceso fue exitoso.
+1. El piloto envia `POST /api/vuelos` al gateway (dominio `qa.grupo1.uta.cl` o `prod.grupo1.uta.cl`).
+2. `vuelos` registra el vuelo en `PostgreSQL vuelos` con estado `PENDIENTE` y publica `vuelo.solicitud`.
+3. `pistas` consume `vuelo.solicitud`, busca la primera pista `LIBRE` en su base, la marca `OCUPADA` y publica `pista.asignacion`.
+4. `vuelos` consume `pista.asignacion`, actualiza el estado a `ASIGNADA` y notifica al frontend por SSE.
+5. `tasas` consume `pista.asignacion`, calcula costos segun tipo de pista, los registra y publica `proceso.completado`.
+6. `vuelos` consume `proceso.completado`, actualiza a `COMPLETADO` y hace broadcast por SSE a los clientes conectados a `/api/vuelos/events`.
+
+> El resultado del diagrama tambien esta exportado como editable en `db/vuelos/vuelos.drawio`, `db/pistas/pistas.drawio` y `db/tasas/tasas.drawio`.
 
 ---
+
 ## 2. Contrato de Datos
 
-Todos los mensajes viajan en formato JSON a traves de RabbitMQ. Cada evento incluye un `vuelo_id` unico que actua como **Correlation ID** para trazar el flujo completo.
+Tres eventos viajan por el exchange topic `atc.exchange` (RabbitMQ). Todas las cargas son JSON en UTF-8. Las `routing key` son jerarquicas y los servicios las vinculan a colas durables nombradas.
 
-### 2.1 `SolicitudVuelo`
+### Evento 1 — SolicitudVuelo  (routing key `vuelo.solicitud`)
 
-Publicado por **Servicio 1**. Consumido por **Servicio 2**.
+Publicado por `vuelos` tras recibir `POST /api/vuelos`. Consumido por `pistas`.
 
 ```json
 {
   "evento": "SolicitudVuelo",
-  "vuelo_id": "ATC-2025-001",
+  "vuelo_id": "ATC-001",
   "aerolinea": "LATAM",
   "numero_vuelo": "LA1234",
   "origen": "SCL",
   "destino": "ARI",
   "aeronave": "A320",
   "pasajeros": 150,
-  "timestamp": "2025-06-19T14:30:00Z",
+  "timestamp": "2026-07-20T12:00:00.000Z",
   "estado": "PENDIENTE"
 }
 ```
 
-| Campo | Tipo | Descripcion |
-|---|---|---|
-| `evento` | string | Nombre del evento (fijo: `SolicitudVuelo`) |
-| `vuelo_id` | string | Identificador unico del vuelo (Correlation ID) |
-| `aerolinea` | string | Nombre de la aerolinea |
-| `numero_vuelo` | string | Codigo del vuelo (ej. LA1234) |
-| `origen` | string | Codigo IATA del aeropuerto de origen |
-| `destino` | string | Codigo IATA del aeropuerto de destino |
-| `aeronave` | string | Modelo de la aeronave |
-| `pasajeros` | number | Cantidad de pasajeros a bordo |
-| `timestamp` | string | Fecha y hora ISO 8601 de la solicitud |
-| `estado` | string | Estado inicial del vuelo (`PENDIENTE`) |
+### Evento 2 — AsignacionPista  (routing key `pista.asignacion`)
 
-### 2.2 `AsignacionPista`
-
-Publicado por **Servicio 2**. Consumido por **Servicio 3**.
+Publicado por `pistas` tras reservar la pista. Consumido por `tasas` y por `vuelos` (para setear estado `ASIGNADA` y notificar SSE).
 
 ```json
 {
   "evento": "AsignacionPista",
-  "vuelo_id": "ATC-2025-001",
-  "pista_id": "RWY-09",
+  "vuelo_id": "ATC-001",
+  "pista_id": "P03",
   "tipo_pista": "COMERCIAL",
-  "hora_asignacion": "2025-06-19T14:30:05Z",
-  "estado": "ASIGNADA"
+  "timestamp": "2026-07-20T12:00:01.500Z"
 }
 ```
 
-| Campo | Tipo | Descripcion |
-|---|---|---|
-| `evento` | string | Nombre del evento (fijo: `AsignacionPista`) |
-| `vuelo_id` | string | Correlation ID del vuelo |
-| `pista_id` | string | Identificador de la pista asignada |
-| `tipo_pista` | string | Tipo de pista (`COMERCIAL`, `CARGA`, `PRIVADO`) |
-| `hora_asignacion` | string | ISO 8601 del momento de asignacion |
-| `estado` | string | Estado (`ASIGNADA`) |
+### Evento 3 — ProcesoCompletado  (routing key `proceso.completado`)
 
-### 2.3 `ProcesoCompletado`
-
-Publicado por **Servicio 3**. Consumido por **Servicio 1**.
+Publicado por `tasas` tras registrar el cobro. Consumido por `vuelos` para cerrar el flujo.
 
 ```json
 {
   "evento": "ProcesoCompletado",
-  "vuelo_id": "ATC-2025-001",
-  "pista_id": "RWY-09",
+  "vuelo_id": "ATC-001",
+  "pista_id": "P03",
   "tasa": {
-    "aterrizaje": 250.00,
-    "estacionamiento": 50.00,
-    "total": 300.00,
-    "moneda": "USD"
+    "aterrizaje": 250,
+    "estacionamiento": 50,
+    "moneda": "USD",
+    "total": 300
   },
-  "timestamp": "2025-06-19T14:30:10Z",
-  "estado": "COMPLETADO"
+  "timestamp": "2026-07-20T12:00:02.800Z"
 }
 ```
 
-| Campo | Tipo | Descripcion |
-|---|---|---|
-| `evento` | string | Nombre del evento (fijo: `ProcesoCompletado`) |
-| `vuelo_id` | string | Correlation ID del vuelo |
-| `pista_id` | string | Pista donde se realizo el aterrizaje |
-| `tasa.aterrizaje` | number | Costo base de aterrizaje (USD) |
-| `tasa.estacionamiento` | number | Costo de estacionamiento (USD) |
-| `tasa.total` | number | Costo total a pagar (USD) |
-| `tasa.moneda` | string | Moneda (`USD`) |
-| `timestamp` | string | ISO 8601 del momento de completitud |
-| `estado` | string | Estado final (`COMPLETADO`) |
+### Reglas de tarificacion (servicio `tasas`)
+
+| Tipo de pista | Aterrizaje (USD) | Estacionamiento (USD) | Total (USD) |
+|---|---|---|---|
+| COMERCIAL | 250 | 50 | 300 |
+| CARGA     | 200 | 80 | 280 |
+| PRIVADO   | 150 | 30 | 180 |
+
+### Estructura del vuelo (PostgreSQL `vuelos`)
+
+`vuelo_id` (PK, string), `aerolinea`, `numero_vuelo`, `origen`, `destino`, `aeronave`, `pasajeros` (int), `estado` (`PENDIENTE` → `ASIGNADA` → `COMPLETADO`), `timestamp_solicitud`.
+
+### Estructura de pista (PostgreSQL `pistas`)
+
+`pista_id` (PK), `tipo` (`COMERCIAL`/`CARGA`/`PRIVADO`), `estado` (`LIBRE`/`OCUPADA`).
+
+### Estructura de tasa (PostgreSQL `tasas`)
+
+`tasa_id` (PK autoincrement), `vuelo_id` (FK logico), `pista_id`, `tipo_pista`, `aterrizaje`, `estacionamiento`, `total`, `moneda`, `timestamp`.
+
+---
+
+## 3. Guia de Configuracion de Acceso (archivo `hosts`)
+
+Queda prohibido el acceso por IP:puerto. El sistema resuelve por nombres de dominio virtuales `.uta.cl` mediante el Ingress de Traefik (incluido con K3s). En la maquina del evaluador, apuntar ambos dominios a la IP del servidor K3s (VM1 del grupo):
+
+### Linux / macOS
+```bash
+sudo tee -a /etc/hosts <<EOF
+146.83.102.20 qa.grupo1.uta.cl
+146.83.102.20 prod.grupo1.uta.cl
+EOF
+```
+
+### Windows (PowerShell como administrador)
+```powershell
+Add-Content C:\Windows\System32\drivers\etc\hosts "`n146.83.102.20 qa.grupo1.uta.cl"
+Add-Content C:\Windows\System32\drivers\etc\hosts "`n146.83.102.20 prod.grupo1.uta.cl"
+```
+
+Verificar:
+```bash
+ping qa.grupo1.uta.cl        # debe responder 146.83.102.20
+curl http://qa.grupo1.uta.cl # debe devolver el frontend
+```
+
+> Si otro grupo usa el mismo clúster K3s, no hay conflicto: cada dominio es distinto y Traefik enruta por `host`.
+
+---
+
+## 4. Manual Operativo de Control
+
+Comandos indispensables para revisar el estado del sistema, los logs unificados y certificar que las copias de seguridad persisten.
+
+### Estado general del sistema
+```bash
+kubectl -n grupo1-qa get pods,svc,ingress                # QA  (cambiar a grupo1-prod para PROD)
+kubectl -n grupo1-qa get deployments
+kubectl -n grupo1-qa top pods                             # requiere metrics-server (opcional)
+```
+
+### Logs unificados (todas las trazas en una sola vista)
+```bash
+./scripts/logs-unificados.sh grupo1-qa                    # sigue en stream (-f)
+# Equivalente interno:
+kubectl -n grupo1-qa logs -l app.kubernetes.io/part-of=atc --all-containers --prefix -f --max-log-requests 20
+```
+
+### Probar el flujo extremo a extremo
+```bash
+curl -X POST http://qa.grupo1.uta.cl/api/vuelos \
+  -H "Content-Type: application/json" \
+  -d '{"vuelo_id":"ATC-QA-001","aerolinea":"LATAM","numero_vuelo":"LA1234","origen":"SCL","destino":"ARI","aeronave":"A320","pasajeros":150}'
+
+sleep 5
+curl http://qa.grupo1.uta.cl/api/vuelos/ATC-QA-001         # estado: COMPLETADO
+curl http://qa.grupo1.uta.cl/api/vuelos                    # historial completo
+```
+
+### Verificar persistencia de datos (caida y reinicio de un pod de BD)
+```bash
+kubectl -n grupo1-qa delete pod -l app=postgres-vuelos     # elimina el pod; el Deployment lo recrea
+# el PVC conserva los datos: al volver a levantar, el historial de vuelos sigue intacto
+kubectl -n grupo1-qa exec deployment/postgres-vuelos -- psql -U atc -d vuelos -c "SELECT COUNT(*) FROM vuelos;"
+```
+
+### Verificar respaldos automaticos (CronJob cada 10 minutos)
+```bash
+kubectl -n grupo1-qa get cronjobs
+kubectl -n grupo1-qa get jobs --sort-by=.metadata.creationTimestamp
+kubectl -n grupo1-qa logs -l job-name --tail=20
+
+# Listar los archivos de respaldo en el PVC compartido (montado en /backups)
+kubectl -n grupo1-qa exec deployment/postgres-vuelos -- ls -la /backups
+# Para restaurar manualmente un respaldo (escenario de resiliencia):
+# kubectl -n grupo1-qa exec -i deployment/postgres-vuelos -- \
+#   psql -U atc -d vuelos < /backups/vuelos-<fecha>.sql
+```
+
+### Forzar un deploy desde CI
+- `git push origin develop` -> deploy automatico a QA
+- `git push origin main`    -> deploy automatico a PROD
+- Seguir en GitHub Actions (tab Actions) los jobs `Build and Push` y `Deploy to QA` / `Deploy to PROD`.
+
+### Resumen de puertos / conexiones
+| Base | Servicio interno | Puerto interno | Usuario | Password |
+|---|---|---|---|---|
+| vuelos | postgres-vuelos | 5432 | atc | atc123 |
+| pistas | postgres-pistas | 5432 | atc | atc123 |
+| tasas  | postgres-tasas  | 5432 | atc | atc123 |
+| RabbitMQ AMQP | rabbitmq | 5672 | guest | guest |
+
+Ningun puerto NodePort se expone al publico. El acceso es exclusivamente por dominio via Ingress en el puerto 80.
 
 ---
 
@@ -156,14 +253,14 @@ Publicado por **Servicio 3**. Consumido por **Servicio 1**.
 
 | Capa | Tecnologia |
 |---|---|
-| Backend | Node.js + Express |
-| Frontend | Next.js |
-| API Gateway | Nginx |
-| Message Broker | RabbitMQ |
-| Bases de Datos | PostgreSQL (1 por microservicio) |
-| Contenedores | Docker (imagenes node:18-alpine) |
-| Orquestacion | Kubernetes / K3s |
-| CI/CD | GitHub Actions (ramas develop y main) |
+| Backend | Node.js 18-alpine + Express |
+| Frontend | Next.js 14 (App Router) |
+| API Gateway | Nginx (proxy /api + estatico) |
+| Message Broker | RabbitMQ 3 (exchange topic `atc.exchange`) |
+| Bases de Datos | PostgreSQL 15-alpine, una por microservicio |
+| Orquestacion | Kubernetes (K3s) con Kustomize |
+| CI/CD | GitHub Actions (develop -> QA, main -> PROD) |
+| Registro de imagenes | GHCR (ghcr.io/cristhian-s1/atc-*) |
 
 ---
 
@@ -182,7 +279,3 @@ Publicado por **Servicio 3**. Consumido por **Servicio 1**.
 | Fernanda Javiera Ventura Briceno | Frontend |
 | Sebastian Alejandro Torres Santibanez | API Gateway |
 | Cristhian Manuel Sanchez Femayor | Database |
-
-## Dinamica de Transferencia de Conocimiento
-
-Cada dia de clases, un integrante distinto dedica *3 minutos* a explicar al resto su area de responsabilidad. El objetivo es que al final de la semana, los 4 miembros puedan explicar el sistema completo.

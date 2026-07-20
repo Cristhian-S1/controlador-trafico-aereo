@@ -78,6 +78,17 @@ web_modules/
 .next
 out
 
+# Beads database (local only, not committed)
+.beads/
+.claude/
+AGENTS.md
+CLAUDE.md
+.agents/
+.codegraph
+.opencode
+proyecto_final.md
+skills-lock.json
+
 # Nuxt.js build / generate output
 .nuxt
 dist
@@ -142,6 +153,9 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
-# Miscelaneas
-Proyecto final.md
-README_sugerencia.md
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+
+

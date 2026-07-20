@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-pistas
+  namespace: grupo1
+spec:
+  selector:
+    app: postgres-pistas
+  ports:
+    - port: 5432
+      targetPort: 5432
