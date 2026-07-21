@@ -41,6 +41,7 @@ jobs:
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
+          echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
 
       - name: Setup Kustomize
         run: |
