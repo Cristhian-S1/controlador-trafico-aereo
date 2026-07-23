@@ -264,18 +264,39 @@ Ningun puerto NodePort se expone al publico. El acceso es exclusivamente por dom
 
 ---
 
-## Repositorio
+## Ejecucion Local con Docker Compose (sin cluster)
 
-- *Rama develop*: despliegues automaticos a QA (qa.grupo1.uta.cl)
-- *Rama main*: despliegues automaticos a PROD (prod.grupo1.uta.cl)
+```bash
+docker compose up -d          # 3 PostgreSQL + RabbitMQ + 3 servicios + gateway
+docker compose logs -f
+docker compose down
+```
+
+URLs locales: API `http://localhost:3001/api/vuelos`, RabbitMQ Management `http://localhost:15672` (guest/guest).
 
 ---
 
-## Integrantes — Grupo 1
+## Reglas de Commits / CI
 
-| Nombre | Rol |
-|---|---|
-| Katalina Ignacia Oviedo Diaz | Backend |
-| Fernanda Javiera Ventura Briceno | Frontend |
-| Sebastian Alejandro Torres Santibanez | API Gateway |
-| Cristhian Manuel Sanchez Femayor | Database |
+- La rama `develop` despliega automaticamente a `grupo1-qa` (qa.grupo1.uta.cl).
+- La rama `main` despliega automaticamente a `grupo1-prod` (prod.grupo1.uta.cl).
+- Esta prohibido el acceso manual a los servidores para desplegar; todo pasa por GitHub Actions.
+- Secretos requeridos en el repo: `KUBECONFIG_QA`, `KUBECONFIG_PROD` (contenido kubeconfig en base64).
+
+---
+
+## Estructura del repositorio
+
+```
+controlador-trafico-aereo/
+├── services/{vuelos,pistas,tasas}/   # 3 microservicios Express (1 archivo src/index.js c/u)
+├── frontend/                         # Next.js 14 - panel del piloto + SSE
+├── nginx/                            # Dockerfile multi-stage + nginx.conf (gateway)
+├── db/{vuelos,pistas,tasas}/         # schema.sql + diagrama .drawio por servicio
+├── k8s/
+│   ├── base/                         # namespace, configmap, secrets, postgres, rabbitmq, apps, backups
+│   └── overlays/{qa,prod}/           # kustomization + ingress por dominio
+├── scripts/logs-unificados.sh        # vista unificada de logs
+├── docker-compose.yml                # entorno local
+└── .github/workflows/                # ci.yml, build-and-push.yml, deploy-qa.yml, deploy-prod.yml
+```
